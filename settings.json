@@ -1,0 +1,28 @@
+{
+    "b_dir" : "background",
+    "s_dir" : "schedule",
+    "c_dir" : "calendar",
+    "screen_size" : [1440,900],
+    "margin" : 5,
+    "pallet_ratio" : [3,1],
+    "calendar_ratio" : [3,2,10],
+    "key" : {
+        "kill_game" : {"mod" : [], "key" : "ESCAPE"},
+        "change_schedule" : {"mod" : [], "key" : "ENTER"},
+        "stop_game" : {"mod" : [], "key" : "SPACE"},
+        "right" : {"mod" : [], "key" : "RIGHT"},
+        "left" : {"mod" : [], "key" : "LEFT"},
+        "down" : {"mod" : [], "key" : "DOWN"},
+        "up" : {"mod" : [], "key" : "UP"},
+        "change_upper_bg" : {"mod" : ["SHIFT"], "key" : "UP"},
+        "change_lowwer_bg" : {"mod" : ["SHIFT"], "key" : "DOWN"}
+    },
+    "DoW_font_size" : 20,
+    "DoW_font" : "MS UI Gothic",
+    "font_size" : 10,
+    "font" : "MS UI Gothic",
+    "Month_font_size" : 100,
+    "Month_font" : "MS UI Gothic",
+    "Day_font_size" : 20,
+    "Day_font" : "MS UI Gothic"
+}
