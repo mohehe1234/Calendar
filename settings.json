@@ -21,8 +21,8 @@
     "DoW_font" : "MS UI Gothic",
     "font_size" : 10,
     "font" : "MS UI Gothic",
-    "Month_font_size" : 100,
-    "Month_font" : "MS UI Gothic",
+    "focused_month_font_size" : 100,
+    "focused_month_font" : "MS UI Gothic",
     "Day_font_size" : 20,
     "Day_font" : "MS UI Gothic"
 }
