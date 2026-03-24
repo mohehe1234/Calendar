@@ -13,27 +13,27 @@ pygame.key.ScancodeWrapper
 class Game():
     def __init__(self,
                  settings : dict = _settings):
+        """
+        self.screen に対して、run func で、 bg_surf -> preremdered_surf -> 他 の順に描画する。
+        """
         pygame.init()
         # 押下され続ける状態を取得parse_keybind でない
         pygame.key.set_repeat(200)
         pygame.display.set_caption("Main Menu")
         self.settings : dict = settings # 広く使用する 変更した時点で、インスタンス化からやり直し
-        self.screen : pygame.Surface = pygame.display.set_mode(self.settings["screen_size"]) # 広く使用する
-        self.selected_bg : int = 0 # event と run
+        self.screen : pygame.Surface = pygame.display.set_mode(self.settings["screen_size"])
+        self.selected_bg : int = 0
         self.schedules : dict[str,defaultdict[str,str]] = self.load_schedules() # event
-        layout : tuple[int,int,int,int,int,int,int,int,int,int,int] = self.calc_layout() # display のサイズを settings.json から変更したら Game のインスタンス化を再度し直す必要がある。
-        layout_surf_with_pos : tuple[pygame.Surface,tuple[int,int]] = self.mk_layout_surf(layout)
+        layout : dict[str,int] = self.calc_layout() # display のサイズを settings.json から変更したら Game のインスタンス化を再度し直す必要がある。
+        prerendered_surf_with_pos : tuple[pygame.Surface,tuple[int,int]] = self.prerender_surface(layout)
         bg_surfs_with_pos : list[tuple[pygame.Surface,tuple[int,int]]] = self.load_bg()
         now : datetime.datetime = datetime.datetime.now()
         self.calendar_year :int = now.year
         self.calendar_month : int = now.month
         self.calendar_day : int = now.day
-        self.run(layout, layout_surf_with_pos, bg_surfs_with_pos)
+        self.run(layout, prerendered_surf_with_pos, bg_surfs_with_pos)
 
     def load_schedules(self) -> dict[str,defaultdict[str,str]]:
-        """
-        schedule = schedules[FILE_NAME_WITHOUT_PATH]
-        """
         schedule_pathes : list[Path] = Path(self.settings["s_dir"]).glob("*.json")
         schedules : dict = {}
         for path in schedule_pathes:
@@ -43,6 +43,100 @@ class Game():
             schedules[path.stem] = defaultdict(str, schedule)
         return schedules
 
+    def calc_layout(self) -> dict[str,int]:
+        """
+        s  : screen
+        p  : pallet
+        mc : month calendar
+        dc : daily calendar
+        """
+        s_width, s_height = self.screen.get_size()
+        margin : int = self.settings["margin"]
+        mc_dc_ratio = self.settings["mc_dc_ratio"][1]/self.settings["mc_dc_ratio"][0]
+        calendar_component_ratio : list[int,int,int] = self.settings["calendar_component_ratio"]
+
+        if s_height <= s_width:
+            s_long_side_length = s_width
+            s_short_side_length = s_height
+        else:
+            s_long_side_length = s_height
+            s_short_side_length = s_width
+        if s_short_side_length - 2*margin <= int((s_long_side_length - 3*margin)//(1 + mc_dc_ratio)):
+            mc_length = int(((s_short_side_length - 2*margin)//7)*7)
+        else:
+            mc_length = int((((s_long_side_length - 3*margin)//(1 + mc_dc_ratio))//7)*7)
+        p_long_side_length = int((mc_length*(1 + mc_dc_ratio) + 3*margin)//1)
+        p_short_side_length = mc_length + 2*margin
+        p_long_side_pos_on_s = (s_long_side_length - p_long_side_length)//2
+        p_short_side_pos_on_s = (s_short_side_length - p_short_side_length)//2
+        dc_long_side_pos_on_s = p_long_side_pos_on_s + mc_length + margin*2
+        dc_short_side_pos_on_s = p_short_side_pos_on_s + margin
+        mc_x_pos : int
+        mc_y_pos : int
+        dc_x_pos : int
+        dc_y_pos : int
+        dc_short_side_length : int = int(mc_length * mc_dc_ratio)
+        if s_height <= s_width:
+            mc_x_pos, mc_y_pos = p_long_side_pos_on_s, p_short_side_pos_on_s
+            dc_x_pos, dc_y_pos = dc_long_side_pos_on_s, dc_short_side_pos_on_s
+        else:
+            mc_y_pos, mc_x_pos = p_long_side_pos_on_s, p_short_side_pos_on_s
+            dc_y_pos, dc_x_pos = dc_long_side_pos_on_s, dc_short_side_pos_on_s
+        sum_ratio = calendar_component_ratio[0] + (calendar_component_ratio[1] + calendar_component_ratio[2]) * 6
+        week_height, date_height, content_height = (mc_length * ratio // sum_ratio for ratio in calendar_component_ratio)
+        week_height = mc_length - (date_height + content_height)*6
+        date_width = int(mc_length // 7)
+        return {"mc_length" : mc_length,
+                "mc_x_pos" : mc_x_pos,
+                "mc_y_pos" : mc_y_pos,
+                "week_height" : week_height,
+                "date_height" : date_height,
+                "content_height" : content_height,
+                "date_width" : date_width,
+                "dc_x_pos" : dc_x_pos,
+                "dc_y_pos" : dc_y_pos,
+                "dc_short_side_length" : dc_short_side_length}
+        
+    def prerender_surface(self,
+                       layout : dict[str,int]) -> tuple[pygame.Surface,tuple[int,int]]:
+        """
+        透過surface に、
+        month calendar の縦横の線を引き、
+        week 部分に曜日を格納し、
+        そのsurface を返す。
+        """
+        # 曜日の font_size を枠に合わせて変更してもよい。
+        mc_length = layout["mc_length"]
+        mc_x_pos = layout["mc_x_pos"]
+        mc_y_pos = layout["mc_y_pos"]
+        week_height = layout["week_height"]
+        date_height = layout["date_height"]
+        content_height = layout["content_height"]
+        date_width = layout["date_width"]
+        mcw_font_size, mcw_font_name = self.settings["mcw_font"]
+
+        if date_height < mcw_font_size:
+            mcw_font_size = date_height
+        mcw_font = pygame.font.SysFont(mcw_font_name,mcw_font_size)
+
+        # 透過surface を作りそこに線を描いていく。
+        surface = pygame.Surface(self.screen.get_size())
+        surface.fill((255,255,255))
+        surface.set_colorkey((255,255,255))
+        pygame.draw.line(surface, (0,0,0), (mc_x_pos,mc_y_pos), (mc_x_pos+mc_length,mc_y_pos))
+        for i in range(7):
+            pygame.draw.line(surface, (0,0,0), 
+                             (mc_x_pos,mc_y_pos+week_height+(date_height+content_height)*i),
+                             (mc_x_pos+date_width*7,mc_y_pos+week_height+(date_height+content_height)*i))
+        for i in range(8):
+            pygame.draw.line(surface, (0,0,0), 
+                             (mc_x_pos+date_width*i,mc_y_pos),
+                             (mc_x_pos+date_width*i,mc_y_pos+week_height+(date_height+content_height)*6))
+
+        for i, day_of_week in enumerate(["日","月","火","水","木","金","土"]):
+            self.draw_text(surface, day_of_week, mc_x_pos+(date_width-mcw_font_size)//2+date_width*i, mc_y_pos+(week_height-mcw_font_size)//2, font=mcw_font)     
+        return (surface, (0,0))
+
     def load_bg(self) -> list[tuple[pygame.Surface,tuple[int,int]]]:
         """
         画像の読み込みとSurfaceの作成は先にしておく。
@@ -51,93 +145,20 @@ class Game():
         bg_pathes : list[Path] = list(Path(self.settings["b_dir"]).glob('*.*'))
         bg_surfs_with_pos : list[tuple[pygame.Surface,tuple[int,int]]] = []
         for path in bg_pathes:
-            screen_w, screen_h = self.screen.get_size()
+            s_width, s_height = self.screen.get_size()
             bg_surf : pygame.Surface = pygame.image.load(path).convert()
-            img_w, img_h = bg_surf.get_size()
-            scale = min(screen_w / img_w, screen_h / img_h)
-            new_size = (int(img_w * scale), int(img_h * scale))
+            img_width, img_height = bg_surf.get_size()
+            scale = min(s_width / img_width, s_height / img_height)
+            new_size = (int(img_width * scale), int(img_height * scale))
             bg_surf = pygame.transform.smoothscale(bg_surf, new_size)
-            x = (screen_w - new_size[0]) // 2
-            y = (screen_h - new_size[1]) // 2
+            x = (s_width - new_size[0]) // 2
+            y = (s_height - new_size[1]) // 2
             bg_surfs_with_pos.append((bg_surf,(x,y)))
         return bg_surfs_with_pos
 
-    def calc_layout(self) -> tuple[int]:
-        screen_width, screen_height = self.screen.get_size()
-        margin : int = self.settings["margin"]
-        pallet_ratio = self.settings["pallet_ratio"][1]/self.settings["pallet_ratio"][0]
-        if screen_height <= screen_width:
-            long_side = screen_width
-            short_side = screen_height
-        else:
-            long_side = screen_height
-            short_side = screen_width
-        if short_side - 2*margin <= int((long_side - 3*margin)//(1 + pallet_ratio)):
-            calendar_length = short_side - 2*margin
-        else:
-            calendar_length = int((long_side - 3*margin)//(1 + pallet_ratio))
-        long_side_pallet = int(calendar_length*(1 + pallet_ratio) + 3*margin)
-        short_side_pallet = calendar_length + 2*margin
-        long_side_pos = (long_side - long_side_pallet)//2
-        short_side_pos = (short_side - short_side_pallet)//2
-        focused_long_side_pos = long_side_pos + calendar_length + margin
-        focused_short_side_pos = short_side_pos + margin
-        x_pos : int
-        y_pos : int
-        focused_x_pos : int
-        focused_y_pos : int
-        focused_length : int = int(calendar_length * pallet_ratio)
-        if screen_height <= screen_width:
-            x_pos, y_pos = long_side_pos, short_side_pos
-            focused_x_pos, focused_y_pos = focused_long_side_pos, focused_short_side_pos
-        else:
-            y_pos, x_pos = long_side_pos, short_side_pos
-            focused_y_pos, focused_x_pos = focused_long_side_pos, focused_short_side_pos
-        calendar_ratio : list[int,int,int] = self.settings["calendar_ratio"]
-        sum_ratio = calendar_ratio[0] + (calendar_ratio[1] + calendar_ratio[2]) * 6
-        week_height, date_height, content_height = (calendar_length * ratio // sum_ratio for ratio in calendar_ratio)
-        date_width = calendar_length // 7
-        return (calendar_length,
-                x_pos,
-                y_pos,
-                week_height,
-                date_height,
-                content_height,
-                date_width,
-                margin,
-                focused_x_pos,
-                focused_y_pos,
-                focused_length)
-        
-    def mk_layout_surf(self,
-                       layout : tuple[int,int,int,int,int,int,int,int,int,int,int]) -> tuple[pygame.Surface,tuple[int,int]]:
-        # 曜日の font_size を枠に合わせて変更してもよい。
-        calendar_length, x_pos, y_pos, week_height, date_height, content_height, date_width, margin, focused_x_pos, focused_y_pos, focused_length = layout
-        # 透過surface を作りそこに線を描いていく。
-        sub_screen_surface = pygame.Surface(self.screen.get_size())
-        sub_screen_surface.fill((255,255,255))
-        sub_screen_surface.set_colorkey((255,255,255))
-        pygame.draw.line(sub_screen_surface, (0,0,0), (x_pos,y_pos), (x_pos+date_width*7,y_pos))
-        for i in range(7):
-            pygame.draw.line(sub_screen_surface, (0,0,0), 
-                             (x_pos,y_pos+week_height+(date_height+content_height)*i),
-                             (x_pos+date_width*7,y_pos+week_height+(date_height+content_height)*i))
-        for i in range(8):
-            pygame.draw.line(sub_screen_surface, (0,0,0), 
-                             (x_pos+date_width*i,y_pos),
-                             (x_pos+date_width*i,y_pos+week_height+(date_height+content_height)*6))
-        DoW_font_size = self.settings["DoW_font_size"]
-        # 縦幅にFoW_font が収まりきらない場合、date_heightに合わせる
-        if date_height < DoW_font_size:
-            DoW_font_size = date_height
-        DoW_font = pygame.font.SysFont(self.settings["DoW_font"],DoW_font_size)
-        for i, day_of_week in enumerate(["日","月","火","水","木","金","土"]):
-            self.draw_text(sub_screen_surface, day_of_week, x_pos+(date_width-DoW_font_size)//2+date_width*i, y_pos+(week_height-DoW_font_size)//2, font=DoW_font)     
-        return (sub_screen_surface, (0,0))
-
     def run(self,
-            layout : tuple[int,int,int,int,int,int,int,int,int,int,int],
-            layout_surf_with_pos : tuple[pygame.Surface,tuple[int,int]],
+            layout : dict[str,int],
+            prerendered_surf_with_pos : tuple[pygame.Surface,tuple[int,int]],
             bg_surfs_with_pos : list[tuple[pygame.Surface,tuple[int,int]]]):
         while True:
             # self.screen の初期化
@@ -145,11 +166,9 @@ class Game():
             # load_bg で読み込んだ画像の描画
             if bg_surfs_with_pos:
                 self.screen.blit(bg_surfs_with_pos[self.selected_bg][0], bg_surfs_with_pos[self.selected_bg][1])
-            # else:
-            #     self.screen.fill((255,255,255))
-            # layout surface の描画
-            self.screen.blit(layout_surf_with_pos[0], layout_surf_with_pos[1])
-            # schedule の描画
+            # prerendered surface の描画
+            self.screen.blit(prerendered_surf_with_pos[0], prerendered_surf_with_pos[1])
+            # 全ての要素を描画
             self.draw_schedule(layout)
             # # paused の描画
             # if self.paused == True:
@@ -159,29 +178,38 @@ class Game():
             pygame.display.update()
 
     def draw_schedule(self,
-                      layout : tuple[int,int,int,int,int,int,int,int,int,int,int]):
-        calendar_length, x_pos, y_pos, week_height, date_height, content_height, date_width, margin, focused_x_pos, focused_y_pos, focused_length = layout
-        color : tuple[int,int,int]
-        monthcalendar = calendar.monthcalendar(self.calendar_year, self.calendar_month)
-        DoW_font_size = self.settings["DoW_font_size"]
-        # 縦幅にFoW_font が収まりきらない場合、date_heightに合わせる
-        if date_height < DoW_font_size:
-            DoW_font_size = date_height
-        DoW_font = pygame.font.SysFont(self.settings["DoW_font"],DoW_font_size)
-        font_size = self.settings["font_size"]
+                      layout : dict[str,int]):
+        mc_length = layout["mc_length"]
+        mc_x_pos = layout["mc_x_pos"]
+        mc_y_pos = layout["mc_y_pos"]
+        week_height = layout["week_height"]
+        date_height = layout["date_height"]
+        content_height = layout["content_height"]
+        date_width = layout["date_width"]
+        dc_x_pos = layout["dc_x_pos"]
+        dc_y_pos = layout["dc_y_pos"]
+        dc_short_side_length = layout["dc_short_side_length"]
+        mcw_font_size, mcw_font_name = self.settings["mcw_font"]
+        mcc_font_size, mcc_font_name = self.settings["mcc_font"]
+        dcm_font_size, dcm_font_name = self.settings["dcm_font"]
+        dcc_font_size, dcc_font_name = self.settings["dcc_font"]
+
+        if date_height < mcw_font_size:
+            mcw_font_size = date_height
+        mcw_font = pygame.font.SysFont(mcw_font_name,mcw_font_size)
         # if date_height < font_size:
         #     font_size = date_height*2
-        font = pygame.font.SysFont(self.settings["font"],font_size)
-        focused_month_font_size = self.settings["focused_month_font_size"]
-        if focused_month_font_size > focused_length//7:
-            focused_month_font_size = focused_length//7
-        focused_month_font = pygame.font.SysFont(self.settings["focused_month_font"],focused_month_font_size)
-        
-        Day_font_size = self.settings["Day_font_size"]
-        Day_font = pygame.font.SysFont(self.settings["Day_font"],Day_font_size)
+        mcc_font = pygame.font.SysFont(mcc_font_name,mcc_font_size)
+        if dcm_font_size > dc_short_side_length//7:
+            dcm_font_size = dc_short_side_length//7
+        dcm_font = pygame.font.SysFont(dcm_font_name,dcm_font_size)
+        mcd_font = pygame.font.SysFont(dcc_font_name,dcc_font_size)
 
-
+        color : tuple[int,int,int]
+        monthcalendar = calendar.monthcalendar(self.calendar_year, self.calendar_month)
         today = "".join(str(datetime.date.today()).split("-"))
+
+        # 各mcd を描画
         for i in range(len(monthcalendar)):
             for j in range(len(monthcalendar[i])):
                 if today == str(self.calendar_year).zfill(4)+str(self.calendar_month).zfill(2)+str(monthcalendar[i][j]).zfill(2):
@@ -193,12 +221,11 @@ class Game():
                 if monthcalendar[i][j] != 0:
                     self.draw_text(self.screen,
                                    str(monthcalendar[i][j]),
-                                   x_pos+date_width*(j+1)-DoW_font_size,
-                                   y_pos+week_height+(date_height-DoW_font_size)//2+(date_height+content_height)*i,
-                                   DoW_font,
-                                   color
-                                   )
-        # 各日付にschedule の描画。ただし、2file 以上のschedule に対応していない。
+                                   mc_x_pos+date_width*(j+1)-mcw_font_size,
+                                   mc_y_pos+week_height+(date_height-mcw_font_size)//2+(date_height+content_height)*i,
+                                   mcw_font,
+                                   color)
+        # 各mcc にschedule の描画。ただし、2file 以上のschedule に対応していない。
         for key, schedule in self.schedules.items():
             color = tuple([int(i) for i in schedule["color"].split(",")])
             for i in range(len(monthcalendar)):
@@ -206,34 +233,33 @@ class Game():
                     day : str = str(self.calendar_year).zfill(4)+str(self.calendar_month).zfill(2)+str(monthcalendar[i][j]).zfill(2)
                     self.place_text(self.screen,
                                     schedule[day],
-                                    x_pos+date_width*j+2,
-                                    y_pos+week_height+date_height+(date_height+content_height)*i,
-                                    font,
-                                    font_size,
+                                    mc_x_pos+date_width*j+2,
+                                    mc_y_pos+week_height+date_height+(date_height+content_height)*i,
+                                    mcc_font,
+                                    mcc_font_size,
                                     date_width,
                                     content_height,
-                                    color
-                                    )
-        
-        # focused の yyyy年mm月dd日 を描画
+                                    color)
+        # dcm の yyyy年mm月dd日 を描画
         color = (0,0,0)
         self.draw_text(self.screen,
                        str(self.calendar_year)+"年"+str(self.calendar_month).zfill(2)+"月"+str(self.calendar_day).zfill(2)+"日",
-                       focused_x_pos,focused_y_pos,focused_month_font,color)
-        
-        # 今表示している年月を取得したうえで、そのschedule を描画する。
-        # ただし、2file 以上のschedule に対応していない。
+                       dc_x_pos,
+                       dc_y_pos,
+                       dcm_font,
+                       color)
+        # dcc にschedule を描画する。ただし、2file 以上のschedule に対応していない。
         day : str = str(self.calendar_year).zfill(4)+str(self.calendar_month).zfill(2)+str(self.calendar_day).zfill(2)
         for key, schedule in self.schedules.items():
             color = tuple([int(i) for i in schedule["color"].split(",")])
             self.place_text_by_tuple(self.screen,
                             (key + ": ", schedule[day]),
-                            focused_x_pos,
-                            focused_y_pos+focused_month_font_size,
-                            Day_font,
-                            Day_font_size,
-                            focused_length,
-                            calendar_length,
+                            dc_x_pos,
+                            dc_y_pos+dcm_font_size,
+                            mcd_font,
+                            dcc_font_size,
+                            dc_short_side_length,
+                            mc_length,
                             color
                             )
 
@@ -265,8 +291,15 @@ class Game():
                     break
                 else:
                     self.draw_text(surface, text[C_num_in_line*i:C_num_in_line*(i+1)], x, y+font_size*i+1, font, color)
-
-
+    def draw_text(self, 
+                  surface : pygame.Surface,
+                  text : str, 
+                  x : int, 
+                  y : int,
+                  font : pygame.font.Font,
+                  color : tuple = (0,0,0)):
+        image = font.render(text, True, color)
+        surface.blit(image, (x, y))
 
     def place_text_by_tuple(self,
                    surface : pygame.Surface,
@@ -286,6 +319,8 @@ class Game():
         # tuple の要素ごとに行を変える。
         lines = 0
         for text in texts:
+            print(lines)
+            print(text)
             lines = self._place_text_by_tuple(surface,
                                       text,
                                       x,
@@ -299,7 +334,7 @@ class Game():
 
     def _place_text_by_tuple(self,
                    surface : pygame.Surface,
-                   text : tuple[str],
+                   text : str,
                    x : int, 
                    y : int,
                    font : pygame.font.Font,
@@ -329,20 +364,6 @@ class Game():
                 else:
                     lines += 1
                     self.draw_text(surface, text[C_num_in_line*i:C_num_in_line*(i+1)], x, y+font_size*i+1, font, color)
-
-
-
-
-    def draw_text(self, 
-                  surface : pygame.Surface,
-                  text : str, 
-                  x : int, 
-                  y : int,
-                  font : pygame.font.Font,
-                  color : tuple = (0,0,0)):
-        
-        image = font.render(text, True, color)
-        surface.blit(image, (x, y))
     
     def handle_events(self,
                       events : list[pygame.event.Event],
