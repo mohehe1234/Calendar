@@ -286,8 +286,8 @@ class Game():
                 self.draw_text(surface, text[C_num_in_line*i:], x, y+font_size*i+1, font, color)
             else:
                 # pallet_height をこえる文章は "..."で省略とする。
-                if pallet_height <= font_size*i+1 + font_size*2:
-                    self.draw_text(surface, "...",  x, y+font_size*i+1, font, color)
+                if pallet_height <= font_size*i+1 + font_size:
+                    self.draw_text(surface, "...",  x, y+font_size*i-font_size//2+1, font, color)
                     break
                 else:
                     self.draw_text(surface, text[C_num_in_line*i:C_num_in_line*(i+1)], x, y+font_size*i+1, font, color)
@@ -319,8 +319,6 @@ class Game():
         # tuple の要素ごとに行を変える。
         lines = 0
         for text in texts:
-            print(lines)
-            print(text)
             lines = self._place_text_by_tuple(surface,
                                       text,
                                       x,
@@ -351,19 +349,20 @@ class Game():
         # 全角のwidth(半角widthの2倍)に合わせて、一行に表示する文字の最大数を決める。
         NoC = len(text)
         C_num_in_line = pallet_width // font_size
-        for i in range(lines, NoC // C_num_in_line+1):
+        for i in range(NoC // C_num_in_line+1):
             if i == NoC // C_num_in_line:
+                self.draw_text(surface, text[C_num_in_line*i:], x, y+font_size*lines+1, font, color)
                 lines += 1
-                self.draw_text(surface, text[C_num_in_line*i:], x, y+font_size*i+1, font, color)
-                return lines+i+1
+                return lines
             else:
                 # pallet_height をこえる文章は "..."で省略とする。
-                if pallet_height <= font_size*i+1 + font_size*2:
-                    self.draw_text(surface, "...",  x, y+font_size*i+1, font, color)
-                    return lines+i+1
-                else:
+                if pallet_height <= font_size*i+1 + font_size:
+                    self.draw_text(surface, "...",  x, y+font_size*lines-font_size//2+1, font, color)
                     lines += 1
-                    self.draw_text(surface, text[C_num_in_line*i:C_num_in_line*(i+1)], x, y+font_size*i+1, font, color)
+                    return lines
+                else:
+                    self.draw_text(surface, text[C_num_in_line*i:C_num_in_line*(i+1)], x, y+font_size*lines+1, font, color)
+                    lines += 1
     
     def handle_events(self,
                       events : list[pygame.event.Event],
