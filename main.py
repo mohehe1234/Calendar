@@ -22,6 +22,7 @@ class Game():
         pygame.display.set_caption("Main Menu")
         self.settings : dict = settings # 広く使用する 変更した時点で、インスタンス化からやり直し
         self.screen : pygame.Surface = pygame.display.set_mode(self.settings["screen_size"])
+        self.screen_condition = "default"
         self.selected_bg : int = 0
         self.schedules : dict[str,defaultdict[str,str]] = self.load_schedules() # event
         layout : dict[str,int] = self.calc_layout() # display のサイズを settings.json から変更したら Game のインスタンス化を再度し直す必要がある。
@@ -54,8 +55,10 @@ class Game():
         margin : int = self.settings["margin"]
         mc_dc_ratio = self.settings["mc_dc_ratio"][1]/self.settings["mc_dc_ratio"][0]
         calendar_component_ratio : list[int,int,int] = self.settings["calendar_component_ratio"]
+        dc_be_ratio = self.settings["dc_be_ratio"][0]/(self.settings["dc_be_ratio"][0] + self.settings["dc_be_ratio"][1])
 
-        if s_height <= s_width:
+        width_is_big = s_height <= s_width
+        if width_is_big:
             s_long_side_length = s_width
             s_short_side_length = s_height
         else:
@@ -75,18 +78,26 @@ class Game():
         mc_y_pos : int
         dc_x_pos : int
         dc_y_pos : int
-        dc_short_side_length : int = int(mc_length * mc_dc_ratio)
-        if s_height <= s_width:
+        be_x_pos : int
+        be_y_pos : int
+        dc_short_side_length : int = int((mc_length * mc_dc_ratio)//1)
+        dc_long_side_length : int = int((mc_length * dc_be_ratio)//1)
+        be_long_side_length : int = int((mc_length * (1 - dc_be_ratio))//1)
+        if width_is_big:
             mc_x_pos, mc_y_pos = p_long_side_pos_on_s, p_short_side_pos_on_s
             dc_x_pos, dc_y_pos = dc_long_side_pos_on_s, dc_short_side_pos_on_s
+            be_x_pos, be_y_pos = dc_x_pos, dc_y_pos + dc_long_side_length + margin
         else:
             mc_y_pos, mc_x_pos = p_long_side_pos_on_s, p_short_side_pos_on_s
             dc_y_pos, dc_x_pos = dc_long_side_pos_on_s, dc_short_side_pos_on_s
+            be_x_pos, be_y_pos = dc_x_pos + dc_long_side_length + margin, dc_y_pos
         sum_ratio = calendar_component_ratio[0] + (calendar_component_ratio[1] + calendar_component_ratio[2]) * 6
         week_height, date_height, content_height = (mc_length * ratio // sum_ratio for ratio in calendar_component_ratio)
         week_height = mc_length - (date_height + content_height)*6
         date_width = int(mc_length // 7)
-        return {"mc_length" : mc_length,
+
+        return {"width_is_big" : width_is_big,
+                "mc_length" : mc_length,
                 "mc_x_pos" : mc_x_pos,
                 "mc_y_pos" : mc_y_pos,
                 "week_height" : week_height,
@@ -95,7 +106,11 @@ class Game():
                 "date_width" : date_width,
                 "dc_x_pos" : dc_x_pos,
                 "dc_y_pos" : dc_y_pos,
-                "dc_short_side_length" : dc_short_side_length}
+                "dc_short_side_length" : dc_short_side_length,
+                "dc_long_side_length" : dc_long_side_length,
+                "be_x_pos" : be_x_pos,
+                "be_y_pos" : be_y_pos,
+                "be_long_side_length" : be_long_side_length,}
         
     def prerender_surface(self,
                        layout : dict[str,int]) -> tuple[pygame.Surface,tuple[int,int]]:
@@ -121,8 +136,8 @@ class Game():
 
         # 透過surface を作りそこに線を描いていく。
         surface = pygame.Surface(self.screen.get_size())
-        surface.fill((255,255,255))
-        surface.set_colorkey((255,255,255))
+        surface.fill((255,255,255)) # 背景を白に
+        surface.set_colorkey((255,255,255)) # 白を透明に
         pygame.draw.line(surface, (0,0,0), (mc_x_pos,mc_y_pos), (mc_x_pos+mc_length,mc_y_pos))
         for i in range(7):
             pygame.draw.line(surface, (0,0,0), 
@@ -173,12 +188,13 @@ class Game():
             # # paused の描画
             # if self.paused == True:
             #     self.draw_text(self.screen, "paused", 100, 100, font=pygame.font.SysFont(self.settings["font"], 40))
-            self.handle_events(pygame.event.get(), bg_surfs_with_pos)
+            self.handle_events(pygame.event.get(), bg_surfs_with_pos, layout)
             # self.handle_key_pressed(pygame.key.get_pressed())
             pygame.display.update()
 
     def draw_schedule(self,
                       layout : dict[str,int]):
+        width_is_big = layout["width_is_big"]
         mc_length = layout["mc_length"]
         mc_x_pos = layout["mc_x_pos"]
         mc_y_pos = layout["mc_y_pos"]
@@ -189,10 +205,15 @@ class Game():
         dc_x_pos = layout["dc_x_pos"]
         dc_y_pos = layout["dc_y_pos"]
         dc_short_side_length = layout["dc_short_side_length"]
+        dc_long_side_length = layout["dc_long_side_length"]
+        be_x_pos = layout["be_x_pos"]
+        be_y_pos = layout["be_y_pos"]
+        be_long_side_length = layout["be_long_side_length"]
         mcw_font_size, mcw_font_name = self.settings["mcw_font"]
         mcc_font_size, mcc_font_name = self.settings["mcc_font"]
         dcm_font_size, dcm_font_name = self.settings["dcm_font"]
         dcc_font_size, dcc_font_name = self.settings["dcc_font"]
+        be_font_size,  be_font_name  = self.settings["be_font"]
 
         if date_height < mcw_font_size:
             mcw_font_size = date_height
@@ -200,10 +221,19 @@ class Game():
         # if date_height < font_size:
         #     font_size = date_height*2
         mcc_font = pygame.font.SysFont(mcc_font_name,mcc_font_size)
-        if dcm_font_size > dc_short_side_length//7:
-            dcm_font_size = dc_short_side_length//7
+        if width_is_big:
+            if dcm_font_size > dc_short_side_length//7:
+                dcm_font_size = dc_short_side_length//7
+                dc_width,dc_height = dc_short_side_length, dc_long_side_length
+                be_width,be_height = dc_short_side_length, be_long_side_length
+        else:
+            if dcm_font_size > mc_length//7:
+                dcm_font_size = mc_length//7
+                dc_height,dc_width = dc_short_side_length, dc_long_side_length
+                be_height,be_width = dc_short_side_length, be_long_side_length
         dcm_font = pygame.font.SysFont(dcm_font_name,dcm_font_size)
-        mcd_font = pygame.font.SysFont(dcc_font_name,dcc_font_size)
+        dcc_font = pygame.font.SysFont(dcc_font_name,dcc_font_size)
+        be_font  = pygame.font.SysFont(be_font_name,be_font_size)
 
         color : tuple[int,int,int]
         monthcalendar = calendar.monthcalendar(self.calendar_year, self.calendar_month)
@@ -212,6 +242,22 @@ class Game():
         # 各mcd を描画
         for i in range(len(monthcalendar)):
             for j in range(len(monthcalendar[i])):
+                # self.calendar_year, month, day に合致する日付を囲う(mc)
+                if str(self.calendar_year).zfill(4)+str(self.calendar_month).zfill(2)+str(self.calendar_day).zfill(2) == str(self.calendar_year).zfill(4)+str(self.calendar_month).zfill(2)+str(monthcalendar[i][j]).zfill(2):
+                    color = (0,0,0)
+                    line_width : int = 3
+                    pygame.draw.line(self.screen, color, 
+                                    (mc_x_pos+date_width*j,mc_y_pos+week_height+(date_height+content_height)*i),
+                                    (mc_x_pos+date_width*(j+1),mc_y_pos+week_height+(date_height+content_height)*i),width=line_width)
+                    pygame.draw.line(self.screen, color, 
+                                    (mc_x_pos+date_width*j,mc_y_pos+week_height+(date_height+content_height)*(i+1)),
+                                    (mc_x_pos+date_width*(j+1),mc_y_pos+week_height+(date_height+content_height)*(i+1)),width=line_width)
+                    pygame.draw.line(self.screen, color, 
+                                    (mc_x_pos+date_width*j,mc_y_pos+week_height+(date_height+content_height)*i),
+                                    (mc_x_pos+date_width*j,mc_y_pos+week_height+(date_height+content_height)*(i+1)),width=line_width)
+                    pygame.draw.line(self.screen, color, 
+                                    (mc_x_pos+date_width*(j+1),mc_y_pos+week_height+(date_height+content_height)*i),
+                                    (mc_x_pos+date_width*(j+1),mc_y_pos+week_height+(date_height+content_height)*(i+1)),width=line_width)
                 if today == str(self.calendar_year).zfill(4)+str(self.calendar_month).zfill(2)+str(monthcalendar[i][j]).zfill(2):
                     color = (255,0,255)
                 elif j == 0:
@@ -225,21 +271,23 @@ class Game():
                                    mc_y_pos+week_height+(date_height-mcw_font_size)//2+(date_height+content_height)*i,
                                    mcw_font,
                                    color)
-        # 各mcc にschedule の描画。ただし、2file 以上のschedule に対応していない。
+        # 各mcc にschedule の描画。
+        mcc_lines : defaultdict[str,int] = defaultdict(int)
         for key, schedule in self.schedules.items():
             color = tuple([int(i) for i in schedule["color"].split(",")])
             for i in range(len(monthcalendar)):
                 for j in range(len(monthcalendar[i])):
                     day : str = str(self.calendar_year).zfill(4)+str(self.calendar_month).zfill(2)+str(monthcalendar[i][j]).zfill(2)
-                    self.place_text(self.screen,
-                                    schedule[day],
-                                    mc_x_pos+date_width*j+2,
-                                    mc_y_pos+week_height+date_height+(date_height+content_height)*i,
-                                    mcc_font,
-                                    mcc_font_size,
-                                    date_width,
-                                    content_height,
-                                    color)
+                    mcc_lines[day] = self.place_text(self.screen,
+                                               (schedule[day],),
+                                               mc_x_pos+date_width*j+2,
+                                               mc_y_pos+week_height+date_height+(date_height+content_height)*i,
+                                               mcc_font,
+                                               mcc_font_size,
+                                               date_width,
+                                               content_height,
+                                               color,
+                                               mcc_lines[day])
         # dcm の yyyy年mm月dd日 を描画
         color = (0,0,0)
         self.draw_text(self.screen,
@@ -248,49 +296,66 @@ class Game():
                        dc_y_pos,
                        dcm_font,
                        color)
-        # dcc にschedule を描画する。ただし、2file 以上のschedule に対応していない。
-        day : str = str(self.calendar_year).zfill(4)+str(self.calendar_month).zfill(2)+str(self.calendar_day).zfill(2)
-        for key, schedule in self.schedules.items():
-            color = tuple([int(i) for i in schedule["color"].split(",")])
-            self.place_text_by_tuple(self.screen,
-                            (key + ": ", schedule[day]),
-                            dc_x_pos,
-                            dc_y_pos+dcm_font_size,
-                            mcd_font,
-                            dcc_font_size,
-                            dc_short_side_length,
-                            mc_length,
-                            color
-                            )
-
-    def place_text(self,
-                   surface : pygame.Surface,
-                   text : str,
-                   x : int, 
-                   y : int,
-                   font : pygame.font.Font,
-                   font_size : int,
-                   pallet_width : int,
-                   pallet_height : int,
-                   color : tuple):
-        """
-            for i in range(NoC // C_num_in_line+1):
-                   ~~~~^^~~~~~~~~~~~~~~
-        ZeroDivisionError: integer division or modulo by zero
-        """
-        # 全角のwidth(半角widthの2倍)に合わせて、一行に表示する文字の最大数を決める。
-        NoC = len(text)
-        C_num_in_line = pallet_width // font_size
-        for i in range(NoC // C_num_in_line+1):
-            if i == NoC // C_num_in_line:
-                self.draw_text(surface, text[C_num_in_line*i:], x, y+font_size*i+1, font, color)
-            else:
-                # pallet_height をこえる文章は "..."で省略とする。
-                if pallet_height <= font_size*i+1 + font_size:
-                    self.draw_text(surface, "...",  x, y+font_size*i-font_size//2+1, font, color)
-                    break
-                else:
-                    self.draw_text(surface, text[C_num_in_line*i:C_num_in_line*(i+1)], x, y+font_size*i+1, font, color)
+        # dcc にschedule を描画する。
+        color = (0,0,0)
+        line_width : int = 3
+        pygame.draw.line(self.screen, color, (dc_x_pos,dc_y_pos+dcm_font_size), (dc_x_pos+dc_width,dc_y_pos+dcm_font_size),width=line_width)
+        pygame.draw.line(self.screen, color, (dc_x_pos,dc_y_pos+dcm_font_size), (dc_x_pos,dc_y_pos+dc_height),width=line_width)
+        pygame.draw.line(self.screen, color, (dc_x_pos+dc_width,dc_y_pos+dc_height), (dc_x_pos+dc_width,dc_y_pos+dcm_font_size),width=line_width)
+        pygame.draw.line(self.screen, color, (dc_x_pos+dc_width,dc_y_pos+dc_height), (dc_x_pos,dc_y_pos+dc_height),width=line_width)
+        if self.screen_condition == "change_schedule":
+            dcc_lines : defaultdict[str,int] = defaultdict(int)
+            day : str = str(self.calendar_year).zfill(4)+str(self.calendar_month).zfill(2)+str(self.calendar_day).zfill(2)
+            for key, schedule in self.schedules.items():
+                color = tuple([int(i) for i in schedule["color"].split(",")])
+                dcc_lines[day] = self.place_text(self.screen,
+                                (key + ": ", schedule[day]),
+                                dc_x_pos,
+                                dc_y_pos+dcm_font_size,
+                                dcc_font,
+                                dcc_font_size,
+                                dc_width,
+                                dc_height,
+                                color,
+                                dcc_lines[day])
+        elif self.screen_condition == "default":
+            dcc_lines : defaultdict[str,int] = defaultdict(int)
+            day : str = str(self.calendar_year).zfill(4)+str(self.calendar_month).zfill(2)+str(self.calendar_day).zfill(2)
+            for key, schedule in self.schedules.items():
+                color = tuple([int(i) for i in schedule["color"].split(",")])
+                dcc_lines[day] = self.place_text(self.screen,
+                                (key + ": ", schedule[day]),
+                                dc_x_pos,
+                                dc_y_pos+dcm_font_size,
+                                dcc_font,
+                                dcc_font_size,
+                                dc_width,
+                                dc_height,
+                                color,
+                                dcc_lines[day])
+        # be の描画
+        buntton_description : tuple[str]
+        if self.screen_condition == "default":
+            buntton_description = ("- Enter : Change schedule",
+                                   "- Esc   : Kill window",
+                                   "- R     : Next day",
+                                   "- L     : The day before",
+                                   "- Up    : Next month",
+                                   "- Down  : The month before"
+                                   )
+        elif self.screen_condition == "change_schedule":
+            buntton_description = ("- Enter : Save changes",)
+        self.place_text(self.screen,
+                        buntton_description,
+                        be_x_pos,
+                        be_y_pos,
+                        be_font,
+                        be_font_size,
+                        be_width*2,
+                        be_height,
+                        color,
+                        0)
+            
     def draw_text(self, 
                   surface : pygame.Surface,
                   text : str, 
@@ -298,10 +363,13 @@ class Game():
                   y : int,
                   font : pygame.font.Font,
                   color : tuple = (0,0,0)):
+        """
+        一行のみの記述
+        """
         image = font.render(text, True, color)
         surface.blit(image, (x, y))
 
-    def place_text_by_tuple(self,
+    def place_text(self,
                    surface : pygame.Surface,
                    texts : tuple[str],
                    x : int, 
@@ -310,16 +378,17 @@ class Game():
                    font_size : int,
                    pallet_width : int,
                    pallet_height : int,
-                   color : tuple):
+                   color : tuple,
+                   lines : int = 0):
         """
+        2行以上の記述
             for i in range(NoC // C_num_in_line+1):
                    ~~~~^^~~~~~~~~~~~~~~
         ZeroDivisionError: integer division or modulo by zero
         """
         # tuple の要素ごとに行を変える。
-        lines = 0
         for text in texts:
-            lines = self._place_text_by_tuple(surface,
+            lines = self._place_text(surface,
                                       text,
                                       x,
                                       y,
@@ -329,8 +398,9 @@ class Game():
                                       pallet_height,
                                       color,
                                       lines)
+        return lines
 
-    def _place_text_by_tuple(self,
+    def _place_text(self,
                    surface : pygame.Surface,
                    text : str,
                    x : int, 
@@ -348,6 +418,8 @@ class Game():
         """
         # 全角のwidth(半角widthの2倍)に合わせて、一行に表示する文字の最大数を決める。
         NoC = len(text)
+        if NoC == 0:
+            return lines
         C_num_in_line = pallet_width // font_size
         for i in range(NoC // C_num_in_line+1):
             if i == NoC // C_num_in_line:
@@ -366,7 +438,8 @@ class Game():
     
     def handle_events(self,
                       events : list[pygame.event.Event],
-                      bg_surfs_with_pos : list[tuple[pygame.Surface,tuple[int,int]]]):
+                      bg_surfs_with_pos : list[tuple[pygame.Surface,tuple[int,int]]],
+                      layout : dict[str,int]):
         def parse_keybind(instructions : str) -> tuple[int, int]:
             MOD_MAP = {
                 "SHIFT": pygame.KMOD_LSHIFT,
@@ -384,62 +457,69 @@ class Game():
             # window を出して、終了していいか確認する処理を if else で。
             sys.exit()
         for event in events:
-            if event.type == pygame.QUIT: # click x button
-                kill_game()
-            elif event.type == pygame.KEYDOWN:
-                mod_key = (event.mod,event.key)
-                # 以下のようにkey をとるのが最善かわからない。
-                # settings.json にキーボード情報を保存さえできればよい。
-                # OSの違いを吸収できるように実装する。
-
-                # bg_surfs_with_pos つまり読み込んだ bg がない場合は change_upper/lower_bg の処理をしない。
-                if bg_surfs_with_pos:
-                    if mod_key == parse_keybind("change_upper_bg"):
-                        self.selected_bg = (self.selected_bg + 1) % len(list(Path(self.settings["b_dir"]).glob('*.*')))
-                    if mod_key == parse_keybind("change_lowwer_bg"):
-                        self.selected_bg = (self.selected_bg - 1) % len(list(Path(self.settings["b_dir"]).glob('*.*')))
-                if mod_key == parse_keybind("kill_game"): # or pygame.K_ESCAPE
+            if self.screen_condition == "default":
+                if event.type == pygame.QUIT: # click x button
                     kill_game()
-                if mod_key == parse_keybind("change_schedule"):
-                    # self.calendar_year
-                    # self.calendar_month
-                    # self.calendar_day
+                elif event.type == pygame.KEYDOWN:
+                    mod_key = (event.mod,event.key)
+                    # 以下のようにkey をとるのが最善かわからない。
+                    # settings.json にキーボード情報を保存さえできればよい。
+                    # OSの違いを吸収できるように実装する。
 
-                    pass
-                elif mod_key == parse_keybind("stop_game"): # or pygame.K_SPACE
-                    if self.paused:
-                        self.paused = False
-                    else:
-                        self.paused = True
-                elif mod_key == parse_keybind("right"): # 右
-                    self.calendar_day += 1
-                    _, last_day = calendar.monthrange(self.calendar_year, self.calendar_month)
-                    if self.calendar_day >= last_day:
-                        self.calendar_day = 1
-                        self.calendar_month += 1
-                        if self.calendar_month > 12:
-                            self.calendar_month = 1
-                            self.calendar_year += 1
-                elif mod_key == parse_keybind("left"): # 左
-                    self.calendar_day -= 1
-                    if self.calendar_day == 0:
+                    # bg_surfs_with_pos つまり読み込んだ bg がない場合は change_upper/lower_bg の処理をしない。
+                    if bg_surfs_with_pos:
+                        if mod_key == parse_keybind("change_upper_bg"):
+                            self.selected_bg = (self.selected_bg + 1) % len(list(Path(self.settings["b_dir"]).glob('*.*')))
+                        if mod_key == parse_keybind("change_lowwer_bg"):
+                            self.selected_bg = (self.selected_bg - 1) % len(list(Path(self.settings["b_dir"]).glob('*.*')))
+                    if mod_key == parse_keybind("kill_game"): # or pygame.K_ESCAPE
+                        kill_game()
+                    if mod_key == parse_keybind("change_schedule"):
+                        # self.calendar_year
+                        # self.calendar_month
+                        # self.calendar_day
+                        self.screen_condition = "change_schedule"
+                    elif mod_key == parse_keybind("stop_game"): # or pygame.K_SPACE
+                        if self.paused:
+                            self.paused = False
+                        else:
+                            self.paused = True
+                    elif mod_key == parse_keybind("right"): # 右
+                        self.calendar_day += 1
+                        _, last_day = calendar.monthrange(self.calendar_year, self.calendar_month)
+                        if self.calendar_day >= last_day:
+                            self.calendar_day = 1
+                            self.calendar_month += 1
+                            if self.calendar_month > 12:
+                                self.calendar_month = 1
+                                self.calendar_year += 1
+                    elif mod_key == parse_keybind("left"): # 左
+                        self.calendar_day -= 1
+                        if self.calendar_day == 0:
+                            self.calendar_month -= 1
+                            if self.calendar_month == 0:
+                                self.calendar_year -= 1
+                                self.calendar_month = 12
+                            _, self.calendar_day = calendar.monthrange(self.calendar_year, self.calendar_month)
+                    elif mod_key == parse_keybind("down"): # 下
                         self.calendar_month -= 1
                         if self.calendar_month == 0:
                             self.calendar_year -= 1
                             self.calendar_month = 12
                         _, self.calendar_day = calendar.monthrange(self.calendar_year, self.calendar_month)
-                elif mod_key == parse_keybind("down"): # 下
-                    self.calendar_month -= 1
-                    if self.calendar_month == 0:
-                        self.calendar_year -= 1
-                        self.calendar_month = 12
-                    _, self.calendar_day = calendar.monthrange(self.calendar_year, self.calendar_month)
-                elif mod_key == parse_keybind("up"): # 上
-                    self.calendar_day = 1
-                    self.calendar_month += 1
-                    if self.calendar_month > 12:
-                        self.calendar_month = 1
-                        self.calendar_year += 1
+                    elif mod_key == parse_keybind("up"): # 上
+                        self.calendar_day = 1
+                        self.calendar_month += 1
+                        if self.calendar_month > 12:
+                            self.calendar_month = 1
+                            self.calendar_year += 1
+            elif self.screen_condition == "change_schedule":
+                if event.type == pygame.QUIT: # click x button
+                    self.screen_condition = "default"
+                elif event.type == pygame.KEYDOWN:
+                    mod_key = (event.mod,event.key)
+                    if mod_key == parse_keybind("change_schedule"):
+                        self.screen_condition = "default"
     # def handle_key_pressed(self,
     #                        pressed_key):
     #     def parse_keybind(instructions : str) -> tuple[int, int]:

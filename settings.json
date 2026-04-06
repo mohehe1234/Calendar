@@ -6,9 +6,10 @@
     "margin" : 5,
     "mc_dc_ratio" : [3,1],
     "calendar_component_ratio" : [3,2,10],
+    "dc_be_ratio" : [3,1],
     "key" : {
         "kill_game" : {"mod" : [], "key" : "ESCAPE"},
-        "change_schedule" : {"mod" : [], "key" : "ENTER"},
+        "change_schedule" : {"mod" : [], "key" : "RETURN"},
         "stop_game" : {"mod" : [], "key" : "SPACE"},
         "right" : {"mod" : [], "key" : "RIGHT"},
         "left" : {"mod" : [], "key" : "LEFT"},
@@ -20,5 +21,6 @@
     "mcw_font" : [20,"MS UI Gothic"],
     "mcc_font" : [10,"MS UI Gothic"],
     "dcm_font" : [100,"MS UI Gothic"],
-    "dcc_font" : [20,"MS UI Gothic"]
+    "dcc_font" : [20,"MS UI Gothic"],
+    "be_font"  : [15,"MS UI Gothic"]
 }
