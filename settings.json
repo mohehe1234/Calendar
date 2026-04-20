@@ -8,18 +8,28 @@
     "calendar_component_ratio" : [3,2,10],
     "dc_be_ratio" : [3,1],
     "key" : {
-        "kill_game" : {"mod" : [], "key" : "ESCAPE"},
-        "change_schedule" : {"mod" : [], "key" : "RETURN"},
-        "stop_game" : {"mod" : [], "key" : "SPACE"},
-        "right" : {"mod" : [], "key" : "RIGHT"},
-        "left" : {"mod" : [], "key" : "LEFT"},
-        "down" : {"mod" : [], "key" : "DOWN"},
-        "up" : {"mod" : [], "key" : "UP"},
-        "change_upper_bg" : {"mod" : ["SHIFT"], "key" : "UP"},
-        "change_lowwer_bg" : {"mod" : ["SHIFT"], "key" : "DOWN"}
+        "Kill game" : {"mod" : [], "key" : "ESCAPE"},
+        "Change schedule" : {"mod" : [], "key" : "RETURN"},
+        "Stop game" : {"mod" : [], "key" : "SPACE"},
+        "Day + 1" : {"mod" : [], "key" : "RIGHT"},
+        "Day - 1" : {"mod" : [], "key" : "LEFT"},
+        "Month - 1" : {"mod" : [], "key" : "DOWN"},
+        "Month + 1" : {"mod" : [], "key" : "UP"},
+        "Change upper bg" : {"mod" : ["LSHIFT"], "key" : "UP"},
+        "Change lowwer bg" : {"mod" : ["LSHIFT"], "key" : "DOWN"},
+
+        "ss_Discard" : {"mod" : [], "key" : "ESCAPE"},
+        "ss_Select schedule" : {"mod" : [], "key" : "RETURN"},
+        "ss_Up" : {"mod" : [], "key" : "UP"},
+        "ss_Down" : {"mod" : [], "key" : "DOWN"},
+
+        "cs_Discard changes" : {"mod" : [], "key" : "ESCAPE"},
+        "cs_Change schedule" : {"mod" : ["LCTRL"], "key" : "S"},
+        "cs_Line break" : {"mod" : [], "key" : "RETURN"},
+        "cs_Delete" : {"mod" : [], "key" : "BACKSPACE"}
     },
     "mcw_font" : [20,"MS UI Gothic"],
-    "mcc_font" : [10,"MS UI Gothic"],
+    "mcc_font" : [8,"MS UI Gothic"],
     "dcm_font" : [100,"MS UI Gothic"],
     "dcc_font" : [20,"MS UI Gothic"],
     "be_font"  : [15,"MS UI Gothic"]
