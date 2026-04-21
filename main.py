@@ -461,6 +461,25 @@ class Mk_calendar():
                    ~~~~^^~~~~~~~~~~~~~~
         ZeroDivisionError: integer division or modulo by zero
         """
+        def split_text_by_width(text, font, max_width):
+            lines = []
+            current_line = ""
+
+            for ch in text:
+                test_line = current_line + ch
+                width, _ = font.size(test_line)
+
+                if width <= max_width:
+                    current_line = test_line
+                else:
+                    lines.append(current_line)
+                    current_line = ch
+
+            if current_line:
+                lines.append(current_line)
+
+            return lines
+        
         capable_c_num_in_line : int = pallet_width//font_size
         a = len(texts)
         for i, text in enumerate(texts,1):
@@ -469,19 +488,36 @@ class Mk_calendar():
             """
             if text != "":
                 text_len : int = len(text)
-                for j in range(text_len // capable_c_num_in_line+1): # 1回回数足さないとダメ
-                    start, end = capable_c_num_in_line*j, min(capable_c_num_in_line*(j+1),text_len)
+                # for j in range(text_len // capable_c_num_in_line+1): # 1回回数足さないとダメ
+                #     start, end = capable_c_num_in_line*j, min(capable_c_num_in_line*(j+1),text_len)
+                #     over = (font_size * (lines+2)) > pallet_height
+                #     last = over and (font_size * (lines+1) < pallet_height)
+                #     if (not last) and (not over):
+                #         self.draw_text(surface, text[start:end], x, y+font_size*lines,font,color)
+                #         lines += 1
+                #         if end == text_len and a == i:
+                #             return lines
+                #     elif last:
+                #         self.draw_text(surface, "...", x, y+font_size*lines,font,color)
+                #         lines += 1
+                #         return lines
+                #     elif over:
+                #         return lines
+                wrapped_lines = split_text_by_width(text, font, pallet_width)
+
+                for line_text in wrapped_lines:
                     over = (font_size * (lines+2)) > pallet_height
                     last = over and (font_size * (lines+1) < pallet_height)
+
                     if (not last) and (not over):
-                        self.draw_text(surface, text[start:end], x, y+font_size*lines,font,color)
+                        self.draw_text(surface, line_text, x, y + font_size * lines, font, color)
                         lines += 1
-                        if end == text_len and a == i:
-                            return lines
+
                     elif last:
-                        self.draw_text(surface, "...", x, y+font_size*lines,font,color)
+                        self.draw_text(surface, "...", x, y + font_size * lines, font, color)
                         lines += 1
                         return lines
+
                     elif over:
                         return lines
         return lines
@@ -512,6 +548,24 @@ class Mk_calendar():
             if self.screen_condition == "default":
                 if event.type == pygame.QUIT: # click x button
                     self.kill_calendar()
+                elif event.type == pygame.MOUSEBUTTONUP:
+                    if event.button == 4:
+                        self.calendar_day += 1
+                        _, last_day = calendar.monthrange(self.calendar_year, self.calendar_month)
+                        if self.calendar_day > last_day:
+                            self.calendar_day = 1
+                            self.calendar_month += 1
+                            if self.calendar_month > 12:
+                                self.calendar_month = 1
+                                self.calendar_year += 1
+                    elif event.button == 5:
+                        self.calendar_day -= 1
+                        if self.calendar_day == 0:
+                            self.calendar_month -= 1
+                            if self.calendar_month == 0:
+                                self.calendar_year -= 1
+                                self.calendar_month = 12
+                            _, self.calendar_day = calendar.monthrange(self.calendar_year, self.calendar_month)
                 elif event.type == pygame.KEYDOWN:
                     mod_key = (event.mod,event.key)
                     # 以下のようにkey をとるのが最善かわからない。

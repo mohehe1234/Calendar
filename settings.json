@@ -29,7 +29,7 @@
         "cs_Delete" : {"mod" : [], "key" : "BACKSPACE"}
     },
     "mcw_font" : [20,"MS UI Gothic"],
-    "mcc_font" : [8,"MS UI Gothic"],
+    "mcc_font" : [10,"MS UI Gothic"],
     "dcm_font" : [100,"MS UI Gothic"],
     "dcc_font" : [20,"MS UI Gothic"],
     "be_font"  : [15,"MS UI Gothic"]
